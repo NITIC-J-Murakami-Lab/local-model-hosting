@@ -1,0 +1,34 @@
+# Model catalog: the names that GPU0_MODEL..GPU3_MODEL in .env accept. Not used on its own; compose.yaml extends it.
+# Each model is defined in <model>/docker/compose.yaml as two templates: fetch-<name> (fetches the weights) and
+# <name> (the server). A GPU slot takes both, so the same model can run on several GPUs at once.
+
+services:
+  qwen: {extends: {file: qwen3.8/docker/compose.yaml, service: qwen}}
+  fetch-qwen: {extends: {file: qwen3.8/docker/compose.yaml, service: fetch-qwen}}
+
+  jev: {extends: {file: autotrust-jev-vl/docker/compose.yaml, service: jev}}
+  fetch-jev: {extends: {file: autotrust-jev-vl/docker/compose.yaml, service: fetch-jev}}
+
+  valen: {extends: {file: valen-decision-1.5/docker/compose.yaml, service: valen}}
+  fetch-valen: {extends: {file: valen-decision-1.5/docker/compose.yaml, service: fetch-valen}}
+
+  pplx: {extends: {file: pplx-decider-v1.3/docker/compose.yaml, service: pplx}}
+  fetch-pplx: {extends: {file: pplx-decider-v1.3/docker/compose.yaml, service: fetch-pplx}}
+
+  d3: {extends: {file: vllm-sr-d3-turbo-v1.1/docker/compose.yaml, service: d3}}
+  fetch-d3: {extends: {file: vllm-sr-d3-turbo-v1.1/docker/compose.yaml, service: fetch-d3}}
+
+  glimmer: {extends: {file: muse-glimmer-30b/docker/compose.yaml, service: glimmer}}
+  fetch-glimmer: {extends: {file: muse-glimmer-30b/docker/compose.yaml, service: fetch-glimmer}}
+
+  gemma: {extends: {file: gemma-4-31b/docker/compose.yaml, service: gemma}}
+  fetch-gemma: {extends: {file: gemma-4-31b/docker/compose.yaml, service: fetch-gemma}}
+
+  # An empty slot (GPUn_MODEL left blank). Zero replicas, so `docker compose up -d` creates nothing for it and stops
+  # whatever the slot ran before. A service still needs an image; the fetch image is the one that is built anyway.
+  none:
+    extends: {file: docker/common.yaml, service: fetch}
+    deploy: {replicas: 0}
+  fetch-none:
+    extends: {file: docker/common.yaml, service: fetch}
+    deploy: {replicas: 0}

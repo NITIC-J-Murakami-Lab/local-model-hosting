@@ -10,7 +10,6 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [glimmer]
     # .eval_results/ holds evaluation results for the model card, so skip it
     command: [Muse-Glimmer-30B, meta-models/Muse-Glimmer-30B, 1297fd7dfeac4598948a5d15886968435c81c2b7, --exclude=.eval_results/*]
 
@@ -18,20 +17,7 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [glimmer]
     image: lmsysorg/sglang:v0.5.23
-    depends_on:
-      fetch-glimmer:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${GLIMMER_PORT:-8005}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${GLIMMER_GPU:-3}"]
-              capabilities: [gpu]
     volumes:
       - glimmer-cache:/root/.cache
     entrypoint: ["python3", "-m", "sglang.launch_server"]
@@ -43,6 +29,3 @@ services:
       --language-model-only
       --reasoning-parser muse
       --tool-call-parser muse
-
-volumes:
-  glimmer-cache:

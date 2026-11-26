@@ -10,7 +10,6 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [valen]
     # assets/ holds images for the README, so skip it
     command: [Valen-Decision-1.5-27B, Valen-Team/Valen-Decision-1.5-27B, 9f1b90bcb6841d9a4a44acfd84c6ecbd4c18fec6, --exclude=assets/*]
 
@@ -18,23 +17,10 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [valen]
     image: local-model-hosting/valen-sglang:f6df4fd
     build:
       context: ../Valen
       dockerfile: serving/sglang/docker/Dockerfile
-    depends_on:
-      fetch-valen:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${VALEN_PORT:-8002}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${VALEN_GPU:-2}"]
-              capabilities: [gpu]
     volumes:
       - valen-cache:/root/.cache
     command: >-
@@ -42,6 +28,3 @@ services:
       --served-model-name Valen-Team/Valen-Decision-1.5-27B
       --port 8000
       --dtype bfloat16
-
-volumes:
-  valen-cache:

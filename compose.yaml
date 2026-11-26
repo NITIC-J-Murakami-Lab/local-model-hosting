@@ -1,23 +1,58 @@
-# Entry point that bundles every model. Each model is defined in <model>/docker/compose.yaml.
-# Every model belongs to a profile named after its service. Choose the models to start with COMPOSE_PROFILES in .env.
-#   docker compose up -d                  fetch any missing weights for the models in COMPOSE_PROFILES, then start them
-#   docker compose up -d gemma            start just this model (it does not have to be in COMPOSE_PROFILES)
-#   docker compose --profile '*' down     stop every model (without --profile '*', models outside COMPOSE_PROFILES keep running)
+# Entry point: one slot per GPU. GPUn_MODEL in .env picks the model that slot gpuN runs on GPU n (the index nvidia-smi
+# shows); a blank value leaves the GPU free. The same model may run in several slots. The choices are listed in models.yaml.
+#   docker compose up -d           apply .env: fetch missing weights, start changed slots, stop emptied ones
+#   docker compose up -d gpu2      start or update just this slot
+#   docker compose logs -f gpu2    follow one slot's log
+#   docker compose down            stop every slot
 #
-#   service  model                              engine           GPU (.env)   port
-#   qwen     Qwen/Qwen3.8-27B                   SGLang           QWEN_GPU     8000
-#   jev      autotrust/JEV-27B-VL               vLLM             JEV_GPU      8001
-#   valen    Valen-Team/Valen-Decision-1.5-27B  SGLang+plugin    VALEN_GPU    8002
-#   pplx     perplexity-ai/pplx-decider-v1.3    pplx_decider     PPLX_GPU     8003
-#   d3       vllm-sr/d3-turbo (v1.1)            d3_server.py     D3_GPU       8004
-#   glimmer  meta-models/Muse-Glimmer-30B       SGLang           GLIMMER_GPU  8005
-#   gemma    google/gemma-4-31B-it              SGLang           GEMMA_GPU    8006
+#   slot  GPU  port (.env)
+#   gpu0  0    GPU0_PORT (8000)
+#   gpu1  1    GPU1_PORT (8001)
+#   gpu2  2    GPU2_PORT (8002)
+#   gpu3  3    GPU3_PORT (8003)
+#
+# Each slot pairs fetch-gpuN, which fetches the weights of its model, with gpuN, the server, which starts once they are ready.
 
-include:
-  - qwen3.8/docker/compose.yaml
-  - autotrust-jev-vl/docker/compose.yaml
-  - valen-decision-1.5/docker/compose.yaml
-  - pplx-decider-v1.3/docker/compose.yaml
-  - vllm-sr-d3-turbo-v1.1/docker/compose.yaml
-  - muse-glimmer-30b/docker/compose.yaml
-  - gemma-4-31b/docker/compose.yaml
+services:
+  fetch-gpu0:
+    extends: {file: models.yaml, service: "fetch-${GPU0_MODEL:-none}"}
+  gpu0:
+    extends: {file: models.yaml, service: "${GPU0_MODEL:-none}"}
+    depends_on: {fetch-gpu0: {condition: service_completed_successfully}}
+    ports: ["${BIND_ADDRESS:-0.0.0.0}:${GPU0_PORT:-8000}:8000"]
+    deploy: {resources: {reservations: {devices: [{driver: nvidia, device_ids: ["0"], capabilities: [gpu]}]}}}
+
+  fetch-gpu1:
+    extends: {file: models.yaml, service: "fetch-${GPU1_MODEL:-none}"}
+  gpu1:
+    extends: {file: models.yaml, service: "${GPU1_MODEL:-none}"}
+    depends_on: {fetch-gpu1: {condition: service_completed_successfully}}
+    ports: ["${BIND_ADDRESS:-0.0.0.0}:${GPU1_PORT:-8001}:8000"]
+    deploy: {resources: {reservations: {devices: [{driver: nvidia, device_ids: ["1"], capabilities: [gpu]}]}}}
+
+  fetch-gpu2:
+    extends: {file: models.yaml, service: "fetch-${GPU2_MODEL:-none}"}
+  gpu2:
+    extends: {file: models.yaml, service: "${GPU2_MODEL:-none}"}
+    depends_on: {fetch-gpu2: {condition: service_completed_successfully}}
+    ports: ["${BIND_ADDRESS:-0.0.0.0}:${GPU2_PORT:-8002}:8000"]
+    deploy: {resources: {reservations: {devices: [{driver: nvidia, device_ids: ["2"], capabilities: [gpu]}]}}}
+
+  fetch-gpu3:
+    extends: {file: models.yaml, service: "fetch-${GPU3_MODEL:-none}"}
+  gpu3:
+    extends: {file: models.yaml, service: "${GPU3_MODEL:-none}"}
+    depends_on: {fetch-gpu3: {condition: service_completed_successfully}}
+    ports: ["${BIND_ADDRESS:-0.0.0.0}:${GPU3_PORT:-8003}:8000"]
+    deploy: {resources: {reservations: {devices: [{driver: nvidia, device_ids: ["3"], capabilities: [gpu]}]}}}
+
+# Engine caches (JIT kernels, torch.compile, etc.), one per model and shared by every slot that runs it.
+# Extended files do not bring their top-level volumes along, so they are declared here.
+volumes:
+  qwen-cache:
+  jev-cache:
+  valen-cache:
+  pplx-cache:
+  d3-cache:
+  glimmer-cache:
+  gemma-cache:

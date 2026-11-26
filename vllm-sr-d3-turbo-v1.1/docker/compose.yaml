@@ -9,7 +9,6 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [d3]
     # caf1ac6 is the commit of tag v1.1
     command: [d3-turbo-v1.1, vllm-sr/d3-turbo, caf1ac6a942b117704ac66aaab0192ac7c8849a9]
 
@@ -17,22 +16,9 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [d3]
     image: local-model-hosting/d3-server:torch-2.14.0
     build:
       context: .
-    depends_on:
-      fetch-d3:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${D3_PORT:-8004}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${D3_GPU:-3}"]
-              capabilities: [gpu]
     volumes:
       - d3-cache:/root/.cache
     entrypoint: ["python3", "/models/d3-turbo-v1.1/d3_server.py"]
@@ -40,6 +26,3 @@ services:
       --model /models/d3-turbo-v1.1
       --name vllm-sr/d3-turbo
       --host 0.0.0.0 --port 8000
-
-volumes:
-  d3-cache:

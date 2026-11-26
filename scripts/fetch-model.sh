@@ -13,12 +13,17 @@ fi
 dir="${MODELS_DIR:-/models}/$1" repo=$2 rev=$3
 shift 3
 
+# GPU slots that run the same model fetch it at the same time. The lock lets the first one download
+# while the others wait, then find the marker and skip.
+mkdir -p "$dir"
+exec 9>"$dir/.fetch.lock"
+flock 9
+
 marker="$dir/.download-complete"
 if [[ -f $marker && $(<"$marker") == "$repo@$rev" ]]; then
   echo "skip: $dir (already has $repo@$rev)"
   exit 0
 fi
 echo "fetch: $repo@$rev -> $dir"
-mkdir -p "$dir"
 hf download "$repo" "$@" --revision "$rev" --local-dir "$dir"
 echo "$repo@$rev" >"$marker"

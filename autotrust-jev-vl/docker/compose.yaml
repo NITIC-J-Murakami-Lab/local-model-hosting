@@ -13,7 +13,6 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [jev]
     # Skip the images and videos used by the README
     command:
       - JEV-27B-VL
@@ -28,20 +27,7 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [jev]
     image: vllm/vllm-openai:v0.33.0
-    depends_on:
-      fetch-jev:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${JEV_PORT:-8001}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${JEV_GPU:-1}"]
-              capabilities: [gpu]
     volumes:
       - jev-cache:/root/.cache
     environment:
@@ -59,6 +45,3 @@ services:
       --max-num-seqs 8
       --trust-request-chat-template
       --port 8000
-
-volumes:
-  jev-cache:

@@ -8,27 +8,13 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [qwen]
     command: [Qwen3.8-27B, Qwen/Qwen3.8-27B, 37561816e66b5b9153b1b64c10968c18c1e6f4a0]
 
   qwen:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [qwen]
     image: lmsysorg/sglang:v0.5.23
-    depends_on:
-      fetch-qwen:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${QWEN_PORT:-8000}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${QWEN_GPU:-0}"]
-              capabilities: [gpu]
     volumes:
       - qwen-cache:/root/.cache
     entrypoint: ["python3", "-m", "sglang.launch_server"]
@@ -39,6 +25,3 @@ services:
       --context-length ${QWEN_CONTEXT_LENGTH:-131072}
       --reasoning-parser qwen3
       --tool-call-parser qwen3_coder
-
-volumes:
-  qwen-cache:

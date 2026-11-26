@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks to run on the DGX before starting. Read only: it changes nothing.
-# Covers the models chosen in COMPOSE_PROFILES in .env. Exits with status 1 if any check is NG.
+# Covers the GPU slots that GPU0_MODEL..GPU3_MODEL in .env fill. Exits with status 1 if any check is NG.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 if [[ ! -f .env ]]; then
@@ -34,19 +34,27 @@ else
   ng "NVIDIA Container Toolkit not found"
 fi
 
-# --- Models to start. Extract these lines from the compose configuration:
-#   gpu <service> <GPU>              one line per service that uses a GPU
+# --- Models to start. Extract these lines from the compose configuration, skipping empty slots (zero replicas):
+#   gpu <slot> <GPU>                 one line per slot that runs a model
 #   weights <dir> <repo>@<revision>  where the weights go (relative to MODELS_DIR) and the value their completion marker holds
 #   build <Dockerfile>               the Dockerfile of an image to build
+# Slots that run the same model yield the same weights line, so each model is counted once.
 if ! command -v python3 >/dev/null; then
   ng "python3 not found (it reads the compose configuration)"
   exit 1
 fi
-if ! plan=$(docker compose config --format json | python3 -I -c '
+if ! config=$(docker compose config --format json); then
+  ng "docker compose config failed (see the error above; each GPUn_MODEL must be a name from models.yaml or blank)"
+  exit 1
+fi
+if ! plan=$(python3 -I -c '
 import json, os, sys
 lines = set()
 for name, svc in (json.load(sys.stdin).get("services") or {}).items():
-    for dev in svc.get("deploy", {}).get("resources", {}).get("reservations", {}).get("devices", []):
+    deploy = svc.get("deploy") or {}
+    if deploy.get("replicas") == 0:
+        continue
+    for dev in (deploy.get("resources") or {}).get("reservations", {}).get("devices", []):
         for gpu in dev.get("device_ids", []):
             lines.add(f"gpu {name} {gpu}")
     if "/scripts/fetch-model.sh" in (svc.get("entrypoint") or []):
@@ -56,18 +64,28 @@ for name, svc in (json.load(sys.stdin).get("services") or {}).items():
     if build:
         lines.add("build " + os.path.join(build["context"], build.get("dockerfile", "Dockerfile")))
 print("\n".join(sorted(lines)))
-'); then
-  ng "docker compose config failed"
+' <<<"$config"); then
+  ng "could not read the compose configuration"
   exit 1
 fi
 mapfile -t gpus < <(sed -n 's/^gpu //p' <<<"$plan")
 mapfile -t weights < <(sed -n 's/^weights //p' <<<"$plan")
 mapfile -t dockerfiles < <(sed -n 's/^build //p' <<<"$plan")
 if ((${#gpus[@]} == 0)); then
-  ng "no model is chosen in COMPOSE_PROFILES in .env"
+  ng "every GPU slot is empty (set GPU0_MODEL..GPU3_MODEL in .env)"
   exit 1
 fi
-ok "models to start: ${COMPOSE_PROFILES:-}"
+# Slot gpuN takes its model from GPUN_MODEL
+model_of() {
+  local var=${1^^}_MODEL
+  echo "${!var:-}"
+}
+slots=()
+for entry in "${gpus[@]}"; do
+  read -r slot _ <<<"$entry"
+  slots+=("$slot=$(model_of "$slot")")
+done
+ok "models to start: ${slots[*]}"
 
 # --- GPUs and driver
 if ! command -v nvidia-smi >/dev/null; then
@@ -81,13 +99,9 @@ else
   ng "NVIDIA driver $driver < 580: every image runs on CUDA 13.0 (vLLM v0.33.0, SGLang v0.5.23, torch 2.14.0)"
 fi
 
-declare -A seen=()
 for entry in "${gpus[@]}"; do
-  read -r svc id <<<"$entry"
-  if [[ -n ${seen[$id]:-} ]]; then
-    ng "GPU $id is assigned to both ${seen[$id]} and $svc (change the GPU numbers in .env)"
-  fi
-  seen[$id]=$svc
+  read -r slot id <<<"$entry"
+  svc="$slot ($(model_of "$slot"))"
   if ! info=$(nvidia-smi -i "$id" --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null); then
     ng "$svc: GPU $id does not exist"
     continue

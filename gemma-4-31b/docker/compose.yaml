@@ -9,7 +9,6 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: fetch
-    profiles: [gemma]
     # .eval_results/ holds evaluation results for the model card, so skip it
     command: [gemma-4-31B-it, google/gemma-4-31B-it, 842da3794eaa0b77d5f08bae87a17459d91ff475, --exclude=.eval_results/*]
 
@@ -17,20 +16,7 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    profiles: [gemma]
     image: lmsysorg/sglang:v0.5.23
-    depends_on:
-      fetch-gemma:
-        condition: service_completed_successfully
-    ports:
-      - ${BIND_ADDRESS:-0.0.0.0}:${GEMMA_PORT:-8006}:8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${GEMMA_GPU:-3}"]
-              capabilities: [gpu]
     volumes:
       - gemma-cache:/root/.cache
     entrypoint: ["python3", "-m", "sglang.launch_server"]
@@ -41,6 +27,3 @@ services:
       --context-length ${GEMMA_CONTEXT_LENGTH:-65536}
       --reasoning-parser gemma4
       --tool-call-parser gemma4
-
-volumes:
-  gemma-cache:
