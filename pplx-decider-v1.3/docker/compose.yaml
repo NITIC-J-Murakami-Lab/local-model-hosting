@@ -1,0 +1,42 @@
+# perplexity-ai/pplx-decider-v1.3 (decisions at /v1/decide). Engine: the pplx_decider library bundled with the model + a minimal HTTP server (serve.py)
+# Neither SGLang nor vLLM can serve it. Its decision_config.json is format_version 2, while SGLang v0.5.23 (/v1/systemone) and
+# vLLM v0.33.0 (Decision 3.0 support) read only format_version 1 and fail at startup with ValueError. Their unreleased main branches do the same.
+# Decisions run on the reference path (fast=False) that the model card used for its evaluation.
+
+services:
+  fetch-pplx:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [pplx]
+    command: [pplx-decider-v1.3, perplexity-ai/pplx-decider-v1.3, 9c2ebb27470d3dec2ad7ab727727e40d142c7213]
+
+  pplx:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [pplx]
+    image: local-model-hosting/pplx-decider-server:torch-2.14.0
+    build:
+      context: .
+    depends_on:
+      fetch-pplx:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${PPLX_PORT:-8003}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${PPLX_GPU:-3}"]
+              capabilities: [gpu]
+    volumes:
+      - pplx-cache:/root/.cache
+    command: >-
+      --model /models/pplx-decider-v1.3
+      --name perplexity-ai/pplx-decider-v1.3
+      --port 8000
+
+volumes:
+  pplx-cache:

@@ -1,0 +1,48 @@
+# meta-models/Muse-Glimmer-30B (general chat, text only). Engine: SGLang v0.5.23
+# The v0.5.23 cookbook says support is not in a release yet and asks you to build the PR branch, but that text is outdated.
+# The model implementation (models/muse_glimmer.py) and the muse parsers have been in SGLang since September 2026 and ship in v0.5.23.
+# --language-model-only makes it text only (the cookbook default). Image input stays off on this version because a bug in
+# the image embedding order was fixed after the v0.5.23 release (sgl-project/sglang#50855).
+# A100 is not among the cookbook's verified GPUs.
+
+services:
+  fetch-glimmer:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [glimmer]
+    # .eval_results/ holds evaluation results for the model card, so skip it
+    command: [Muse-Glimmer-30B, meta-models/Muse-Glimmer-30B, 1297fd7dfeac4598948a5d15886968435c81c2b7, --exclude=.eval_results/*]
+
+  glimmer:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [glimmer]
+    image: lmsysorg/sglang:v0.5.23
+    depends_on:
+      fetch-glimmer:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${GLIMMER_PORT:-8005}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GLIMMER_GPU:-3}"]
+              capabilities: [gpu]
+    volumes:
+      - glimmer-cache:/root/.cache
+    entrypoint: ["python3", "-m", "sglang.launch_server"]
+    command: >-
+      --model-path /models/Muse-Glimmer-30B
+      --served-model-name meta-models/Muse-Glimmer-30B
+      --host 0.0.0.0 --port 8000
+      --context-length ${GLIMMER_CONTEXT_LENGTH:-131072}
+      --language-model-only
+      --reasoning-parser muse
+      --tool-call-parser muse
+
+volumes:
+  glimmer-cache:

@@ -1,0 +1,23 @@
+# Entry point that bundles every model. Each model is defined in <model>/docker/compose.yaml.
+# Every model belongs to a profile named after its service. Choose the models to start with COMPOSE_PROFILES in .env.
+#   docker compose up -d                  fetch any missing weights for the models in COMPOSE_PROFILES, then start them
+#   docker compose up -d gemma            start just this model (it does not have to be in COMPOSE_PROFILES)
+#   docker compose --profile '*' down     stop every model (without --profile '*', models outside COMPOSE_PROFILES keep running)
+#
+#   service  model                              engine           GPU (.env)   port
+#   qwen     Qwen/Qwen3.8-27B                   SGLang           QWEN_GPU     8000
+#   jev      autotrust/JEV-27B-VL               vLLM             JEV_GPU      8001
+#   valen    Valen-Team/Valen-Decision-1.5-27B  SGLang+plugin    VALEN_GPU    8002
+#   pplx     perplexity-ai/pplx-decider-v1.3    pplx_decider     PPLX_GPU     8003
+#   d3       vllm-sr/d3-turbo (v1.1)            d3_server.py     D3_GPU       8004
+#   glimmer  meta-models/Muse-Glimmer-30B       SGLang           GLIMMER_GPU  8005
+#   gemma    google/gemma-4-31B-it              SGLang           GEMMA_GPU    8006
+
+include:
+  - qwen3.8/docker/compose.yaml
+  - autotrust-jev-vl/docker/compose.yaml
+  - valen-decision-1.5/docker/compose.yaml
+  - pplx-decider-v1.3/docker/compose.yaml
+  - vllm-sr-d3-turbo-v1.1/docker/compose.yaml
+  - muse-glimmer-30b/docker/compose.yaml
+  - gemma-4-31b/docker/compose.yaml

@@ -1,0 +1,44 @@
+# Qwen/Qwen3.8-27B (general chat). Engine: SGLang v0.5.23
+# The flags follow the official SGLang cookbook, although A100 is not among the cookbook's verified GPUs.
+# The cookbook sets --kv-cache-dtype fp8_e4m3 in every recipe. It is left out because it has not been confirmed
+# to work on A100 (the KV cache stays in BF16).
+
+services:
+  fetch-qwen:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [qwen]
+    command: [Qwen3.8-27B, Qwen/Qwen3.8-27B, 37561816e66b5b9153b1b64c10968c18c1e6f4a0]
+
+  qwen:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [qwen]
+    image: lmsysorg/sglang:v0.5.23
+    depends_on:
+      fetch-qwen:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${QWEN_PORT:-8000}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${QWEN_GPU:-0}"]
+              capabilities: [gpu]
+    volumes:
+      - qwen-cache:/root/.cache
+    entrypoint: ["python3", "-m", "sglang.launch_server"]
+    command: >-
+      --model-path /models/Qwen3.8-27B
+      --served-model-name Qwen/Qwen3.8-27B
+      --host 0.0.0.0 --port 8000
+      --context-length ${QWEN_CONTEXT_LENGTH:-131072}
+      --reasoning-parser qwen3
+      --tool-call-parser qwen3_coder
+
+volumes:
+  qwen-cache:

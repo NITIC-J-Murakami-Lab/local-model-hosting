@@ -1,0 +1,45 @@
+# vllm-sr/d3-turbo v1.1 (decisions at /v1/systemone). Engine: the official d3_server.py bundled with the model (runs on transformers)
+# Neither SGLang nor vLLM can serve it. Its decision_config.json sets attention_mode to prefix_bidir, while SGLang v0.5.23 and
+# vLLM v0.33.0 read only causal and noncausal_full_attention (ValueError at startup). Their unreleased main branches do the same.
+# vLLM's d3 support targets the non-turbo d3, which rereads the input for every question.
+# The authors validated it on ROCm (MI325X) only. On CUDA it runs on the transformers path, not the fast path (d3_fast.py, ROCm only).
+
+services:
+  fetch-d3:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [d3]
+    # caf1ac6 is the commit of tag v1.1
+    command: [d3-turbo-v1.1, vllm-sr/d3-turbo, caf1ac6a942b117704ac66aaab0192ac7c8849a9]
+
+  d3:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [d3]
+    image: local-model-hosting/d3-server:torch-2.14.0
+    build:
+      context: .
+    depends_on:
+      fetch-d3:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${D3_PORT:-8004}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${D3_GPU:-3}"]
+              capabilities: [gpu]
+    volumes:
+      - d3-cache:/root/.cache
+    entrypoint: ["python3", "/models/d3-turbo-v1.1/d3_server.py"]
+    command: >-
+      --model /models/d3-turbo-v1.1
+      --name vllm-sr/d3-turbo
+      --host 0.0.0.0 --port 8000
+
+volumes:
+  d3-cache:

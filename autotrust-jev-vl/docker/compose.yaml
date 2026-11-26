@@ -1,0 +1,64 @@
+# autotrust/JEV-27B-VL (decisions at /v1/decide, plus chat). Engine: vLLM v0.33.0
+# Why not SGLang: the decision API, serve_decide.py (bundled with the model), depends on vLLM internals,
+# and the model card does not mention SGLang.
+#
+# The repository was renamed to autotrust/AutoTrust-Decider-Pro-Vision-27B (the old name redirects).
+# It holds the Qwen3.8-27B weights unchanged plus a LoRA for System 1 (jev-decision).
+# The flags match serve.sh bundled with the model. Never remove these two:
+#   --max-num-seqs 8              batching more than 8 sequences corrupts the probabilities on the LoRA path (a known issue in the model card)
+#   --trust-request-chat-template needed to use the raw template for decisions that include images
+
+services:
+  fetch-jev:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [jev]
+    # Skip the images and videos used by the README
+    command:
+      - JEV-27B-VL
+      - autotrust/AutoTrust-Decider-Pro-Vision-27B
+      - 9e53b8a809d2ab98e3e6a55b2b2dbf94b4c1e84a
+      - --exclude=*.png
+      - --exclude=*.mp4
+      - --exclude=blog/*
+      - --exclude=reports/*
+
+  jev:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [jev]
+    image: vllm/vllm-openai:v0.33.0
+    depends_on:
+      fetch-jev:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${JEV_PORT:-8001}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${JEV_GPU:-1}"]
+              capabilities: [gpu]
+    volumes:
+      - jev-cache:/root/.cache
+    environment:
+      VLLM_NO_USAGE_STATS: "1"
+    entrypoint: ["python3", "/models/JEV-27B-VL/serve_decide.py"]
+    command: >-
+      --model /models/JEV-27B-VL
+      --served-model-name autotrust/JEV-27B-VL
+      --enable-lora --max-lora-rank 32
+      --lora-modules jev-decision=/models/JEV-27B-VL/adapter_vllm
+      --logprobs-mode processed_logprobs
+      --max-model-len ${JEV_MAX_MODEL_LEN:-131072}
+      --enable-prefix-caching --mamba-cache-mode align
+      --limit-mm-per-prompt '{"image": 8}'
+      --max-num-seqs 8
+      --trust-request-chat-template
+      --port 8000
+
+volumes:
+  jev-cache:

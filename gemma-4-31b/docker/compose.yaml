@@ -1,0 +1,46 @@
+# google/gemma-4-31B-it (general chat, image input). Engine: SGLang v0.5.23
+# The flags follow the official SGLang cookbook, although A100 is not among the cookbook's verified GPUs
+# (for 31B: 2x H200, 1x B200 and others).
+# Outside SM100, SGLang picks the triton attention backend automatically (arg_groups/model_overrides/gemma4.py).
+# The weights take 62.6GB and leave roughly 10GB for the KV cache, so .env keeps the context length modest.
+
+services:
+  fetch-gemma:
+    extends:
+      file: ../../docker/common.yaml
+      service: fetch
+    profiles: [gemma]
+    # .eval_results/ holds evaluation results for the model card, so skip it
+    command: [gemma-4-31B-it, google/gemma-4-31B-it, 842da3794eaa0b77d5f08bae87a17459d91ff475, --exclude=.eval_results/*]
+
+  gemma:
+    extends:
+      file: ../../docker/common.yaml
+      service: server
+    profiles: [gemma]
+    image: lmsysorg/sglang:v0.5.23
+    depends_on:
+      fetch-gemma:
+        condition: service_completed_successfully
+    ports:
+      - ${BIND_ADDRESS:-0.0.0.0}:${GEMMA_PORT:-8006}:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GEMMA_GPU:-3}"]
+              capabilities: [gpu]
+    volumes:
+      - gemma-cache:/root/.cache
+    entrypoint: ["python3", "-m", "sglang.launch_server"]
+    command: >-
+      --model-path /models/gemma-4-31B-it
+      --served-model-name google/gemma-4-31B-it
+      --host 0.0.0.0 --port 8000
+      --context-length ${GEMMA_CONTEXT_LENGTH:-65536}
+      --reasoning-parser gemma4
+      --tool-call-parser gemma4
+
+volumes:
+  gemma-cache:

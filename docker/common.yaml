@@ -1,0 +1,52 @@
+# Shared settings that each model's docker/compose.yaml uses through `extends`. Not used on its own.
+# Relative paths resolve against the directory of this file.
+
+services:
+  # Template for inference servers. Each model must listen on port 8000 inside the container and answer GET /health.
+  server:
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${MODELS_DIR:?set MODELS_DIR in .env}
+        target: /models
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRITON_CACHE_DIR: /root/.cache/triton
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10)"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20m
+    logging:
+      options:
+        max-size: 50m
+        max-file: "3"
+
+  # Template for fetching weights (no GPU). Pass `<dir> <repo> <revision> [extra hf download args...]` as the command.
+  # Weights that are already complete are skipped without touching the network (scripts/fetch-model.sh).
+  fetch:
+    image: local-model-hosting/fetch:hub-2.4.0
+    build:
+      context: .
+      dockerfile: fetch.Dockerfile
+    user: "${HOST_UID:-0}:${HOST_GID:-0}"
+    entrypoint: ["bash", "/scripts/fetch-model.sh"]
+    environment:
+      MODELS_DIR: /models
+      HF_HOME: /tmp/hf-home
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - type: bind
+        source: ${MODELS_DIR:?set MODELS_DIR in .env}
+        target: /models
+        bind:
+          create_host_path: false
+      - ../scripts:/scripts:ro
