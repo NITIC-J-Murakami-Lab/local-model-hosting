@@ -4,7 +4,9 @@
 #     (transformers 5.17.0 is also what d3-turbo's requirements.txt pins)
 #   - everything else: the latest release as of the d3-turbo build date (2026-10-19)
 FROM python:3.12-slim-bookworm
-RUN pip install --no-cache-dir torch==2.14.0 torchvision==0.29.0
+# The CUDA 12.6 build of torch, which runs on NVIDIA drivers from R560 on. The default PyPI build targets CUDA 13.0 and needs
+# R580 or later, because this image, unlike the CUDA-based engine images, has no forward-compatibility libraries.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu126 torch==2.14.0 torchvision==0.29.0
 # Triton (used by flash-linear-attention) builds its launchers with a C compiler at run time
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libc6-dev \

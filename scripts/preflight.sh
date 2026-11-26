@@ -92,11 +92,15 @@ if ! command -v nvidia-smi >/dev/null; then
   ng "nvidia-smi not found"
   exit 1
 fi
+# The SGLang and vLLM images are built on CUDA 13.0 and, below R580, run through the CUDA forward-compatibility libraries
+# they carry (A100 supports them); this works with SGLang on R570. pplx and d3 use the CUDA 12.6 build of torch (R560 on).
 driver=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
 if ((${driver%%.*} >= 580)); then
   ok "NVIDIA driver $driver"
+elif ((${driver%%.*} >= 570)); then
+  ok "NVIDIA driver $driver (the CUDA 13.0 engine images run through CUDA forward compatibility)"
 else
-  ng "NVIDIA driver $driver < 580: every image runs on CUDA 13.0 (vLLM v0.33.0, SGLang v0.5.23, torch 2.14.0)"
+  warn "NVIDIA driver $driver is older than R570, the oldest driver these images have run on"
 fi
 
 for entry in "${gpus[@]}"; do

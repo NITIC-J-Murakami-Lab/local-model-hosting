@@ -16,7 +16,7 @@ services:
     extends:
       file: ../../docker/common.yaml
       service: server
-    image: local-model-hosting/d3-server:torch-2.14.0
+    image: local-model-hosting/d3-server:torch-2.14.0-cu126
     build:
       context: .
     volumes:

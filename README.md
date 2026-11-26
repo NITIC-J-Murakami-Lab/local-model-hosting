@@ -51,7 +51,7 @@ Model-specific details (the revision to fetch, engine and launch flags) live in 
 ## Requirements
 
 - One 80GB A100 per model you start. BF16 weights take 52-63GB per model, so they do not fit on a 40GB card.
-- NVIDIA driver 580 or later. Every image runs on CUDA 13.0 (vLLM v0.33.0, SGLang v0.5.23, torch 2.14.0).
+- NVIDIA driver R570 or later. The SGLang v0.5.23 and vLLM v0.33.0 images are built on CUDA 13.0, which needs R580; on older drivers they run through the CUDA forward-compatibility libraries in the image, which data center GPUs such as A100 support (confirmed with SGLang on R570). The `pplx` and `d3` images use the CUDA 12.6 build of torch 2.14.0, which runs from R560 on.
 - Docker, Docker Compose v2 or later, and the NVIDIA Container Toolkit.
 - python3, which `scripts/preflight.sh` uses to read the Compose configuration.
 - Space for the weights: 52-63GB per model you assign (once, however many GPUs run it), about 390GB for all 7. On a DGX, the data RAID at `/raid` is recommended.
